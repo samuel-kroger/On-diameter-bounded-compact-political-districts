@@ -1,0 +1,5 @@
+State, parcel level, k, n, m, s, obj_wo_symmetry, time_wo_symmetry, obj_w_symmetry, time_w_symmetry, 
+MS,county,4,82,202,6,1,2035.84,1,10.19, 
+NM,county,3,33,78,4,Infeasible,0.04,Infeasible,0.01, 
+NM,county,3,33,78,4,Infeasible,0.03,Infeasible,0.01, 
+NJ,tract,12,2181,6061,12,Timeout,3601.09,Timeout,3619.34, 

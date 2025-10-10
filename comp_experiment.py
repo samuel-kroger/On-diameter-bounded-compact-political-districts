@@ -32,11 +32,12 @@ pandas.options.mode.chained_assignment = None
 
 class problem_instance(object):
 
-	def __init__(self, state, parcel_level, s):
+	def __init__(self, state, parcel_level, s, group):
 
 		self.state = state
 		self.parcel_level = parcel_level
 		self.model_time_limit = 3600
+		self.group = group
 
 		self.error_message = ''
 		self.f = 0.5
@@ -64,9 +65,18 @@ class problem_instance(object):
 			self.voting_age_population = [self.parcel_data['nodes'][i]['P0030001'] for i in self.G.nodes()]
 			for v in self.G.nodes():
 				self.G.nodes[v]['VAP'] = self.voting_age_population[v]
-			self.minority_population = [self.parcel_data['nodes'][i]['P0030004'] for i in self.G.nodes()]
+			
+
+
+			if self.group == 'black':
+				self.minority_population = [self.parcel_data['nodes'][i]['P0030004'] for i in self.G.nodes()]
+			elif self.group == 'hispanic':
+				self.minority_population = [self.parcel_data['nodes'][i]['P0040002'] for i in self.G.nodes()]
+
+
 			for v in self.G.nodes():
-				self.G.nodes[v]['MVAP'] = self.minority_population[v]
+				if self.group != 'none':
+					self.G.nodes[v]['MVAP'] = self.minority_population[v]
 
 			self.L = math.ceil((1 - self.population_deviation / 2) * sum(self.population) / self.k)
 			self.M = sum(self.population) / self.k
@@ -91,33 +101,32 @@ class problem_instance(object):
 		else:
 			self.error_message += ' no SHAPE data'
 			print(self.error_message)
-
 		if self.error_message == '':
+			if self.group != 'none':
+					
+				
+				if os.path.exists('results_' + self.group + '/upper_bound_minority_districts/upper_bound_minority_districts_' + self.state + '_' + self.parcel_level + '.txt'):
+					with open('results_' + self.group + '/upper_bound_minority_districts/upper_bound_minority_districts_' + self.state + '_' + self.parcel_level + '.txt', 'r') as file:
+						for line in file:
+							self.k_minority = int(line)
+							print('Upper bound on minority districts read in as :', str(self.k_minority))
 
-			
-			if os.path.exists('results/upper_bound_minority_districts/upper_bound_minority_districts_' + self.state + '_' + self.parcel_level + '.txt'):
-				with open('results/upper_bound_minority_districts/upper_bound_minority_districts_' + self.state + '_' + self.parcel_level + '.txt', 'r') as file:
-					for line in file:
-						self.k_minority = int(line)
-						print('Upper bound on minority districts read in as :', str(self.k_minority))
+				else:
+					with open('results_' + self.group + '/upper_bound_minority_districts/upper_bound_minority_districts_' + self.state + '_' + self.parcel_level + '.txt', 'w') as doc:
+						self.minority_district_range = range(self.k)
+						self.k_minority = self.k
+						self.find_upper_bound_minority_districts()
+						doc.write(str(self.k_minority))
+						print('Upper bound on minority districts comupted and stored as :', str(self.k_minority))
 
-			else:
-				with open('results/upper_bound_minority_districts/upper_bound_minority_districts_' + self.state + '_' + self.parcel_level + '.txt', 'w') as doc:
-					self.minority_district_range = range(self.k)
-					self.k_minority = self.k
-					self.find_upper_bound_minority_districts()
-					doc.write(str(self.k_minority))
-					print('Upper bound on minority districts comupted and stored as :', str(self.k_minority))
-
-			
-			self.minority_district_range = range(self.k_minority)
-			self.majority_district_range = range(self.k_minority, self.k)
+				self.minority_district_range = range(self.k_minority)
+				self.majority_district_range = range(self.k_minority, self.k)
 
 
 			self.find_upper_bound_s()
 
-			if os.path.exists('results/lower_bound_s/lower_bound_s_' + self.state + '_' + self.parcel_level + '.txt'):
-				with open('results/lower_bound_s/lower_bound_s_' + self.state + '_' + self.parcel_level + '.txt', 'r') as file:
+			if os.path.exists('results_' + self.group + '/lower_bound_s/lower_bound_s_' + self.state + '_' + self.parcel_level + '.txt'):
+				with open('results_' + self.group + '/lower_bound_s/lower_bound_s_' + self.state + '_' + self.parcel_level + '.txt', 'r') as file:
 					for line in file:
 						self.lower_bound_s = int(line)
 
@@ -135,7 +144,7 @@ class problem_instance(object):
 				self.lower_bound_s = 1
 				self.find_lower_bound_s()
 				print('success, found lower_bound_s: ', str(self.lower_bound_s))
-				
+			
 	def get_current_plan_stat(self):
 		
 		district_plan = gpd.read_file('./raw_data/current_plan/' + self.state + '.shp')
@@ -217,7 +226,7 @@ class problem_instance(object):
 			print('lower: ', self.lower_bound_s)
 			print('s: ', s)
 		
-			stability_number, max_independent_set = compuete_stability_number('compuete', self.G, self.state, self.k, s)
+			stability_number, max_independent_set = compute_stability_number('compute', self.G, self.state, self.k, s, self.group)
 			
 
 			if stability_number == 'timed_out':
@@ -237,21 +246,22 @@ class problem_instance(object):
 
 	def find_lower_bound_s(self):
 
+
 		self.compute_lower_bound_s()
-		with open('results/lower_bound_s/lower_bound_s_' + self.state + '_' + self.parcel_level + '.txt', 'w') as file:
+		with open('results_' + self.group + '/lower_bound_s/lower_bound_s_' + self.state + '_' + self.parcel_level + '.txt', 'w') as file:
 			file.write(str(self.lower_bound_s))
 
 	def find_upper_bound_s(self):
 
-		if os.path.exists('results/upper_bound_s/upper_bound_s_' + self.state + '_' + self.parcel_level + '.txt'):
-			with open('results/upper_bound_s/upper_bound_s_' + self.state + '_' + self.parcel_level + '.txt', 'r') as file:
+		if os.path.exists('results_' + self.group + '/upper_bound_s/upper_bound_s_' + self.state + '_' + self.parcel_level + '.txt'):
+			with open('results_' + self.group + '/upper_bound_s/upper_bound_s_' + self.state + '_' + self.parcel_level + '.txt', 'r') as file:
 				for line in file:
 					self.upper_bound_s = int(float(line))
 					print("Upper bound on s read as: ", self.upper_bound_s)
 		else:
 			self.upper_bound_s = nx.diameter(self.G)
 
-			with open('results/upper_bound_s/upper_bound_s_' + self.state + '_' + self.parcel_level + '.txt', 'w') as file:
+			with open('results_' + self.group + '/upper_bound_s/upper_bound_s_' + self.state + '_' + self.parcel_level + '.txt', 'w') as file:
 				file.write(str(self.upper_bound_s))
 
 			print("Upper bound on s computed as: ", self.upper_bound_s)
@@ -260,16 +270,24 @@ class problem_instance(object):
 
 		self.minority_district_ONLY_model(0, relax, continuity)
 		self.k_minority = self.num_minority_districts
+		print(self.k_minority)
+		print(self.num_minority_districts)
 
 	def find_interesting_s_vals(self):
+
+
+		if not os.path.exists('results_' + self.group + '/upper_bound_minority_table.csv'):
+			with open('results_' + self.group + '/upper_bound_minority_table.csv', 'w') as doc:
+				doc.write('State, parcel, k, n, m, objective, time (s), x & z fixed (%)')
+
 
 		output_string = 's_vaule, num_minority_districts, time_out \n'
 		s = self.lower_bound_s - 1
 
 		continue_search = True
 
-		if not os.path.exists('./interesting_s_vals.csv'):
-			with open('./interesting_s_vals.csv', 'a') as doc:
+		if not os.path.exists('results_' + self.group + '/interesting_s_vals.csv'):
+			with open('results_' + self.group + '/interesting_s_vals.csv', 'a') as doc:
 				doc.write('state, s, number of districts, time out \n')
 
 		while continue_search:
@@ -293,10 +311,10 @@ class problem_instance(object):
 			output_string += current_string
 			#self.break_points.append([s, self.num_minority_districts])
 
-			with open('./interesting_s_vals.csv', 'a') as doc:
+			with open('./results_' + self.group + '/interesting_s_vals.csv', 'a') as doc:
 				current_string = self.state + ',' + current_string
 				doc.write(current_string)
-		with open('./results/interesting_s_vals/interesting_s_vals_' + self.state + '_' + self.parcel_level + '.csv', 'w') as doc:
+		with open('./results_' + self.group + '/interesting_s_vals/interesting_s_vals_' + self.state + '_' + self.parcel_level + '.csv', 'w') as doc:
 			doc.write(output_string)
 
 	def run_GerryChain_heuristic(self, iterations):
@@ -499,7 +517,7 @@ class problem_instance(object):
 	def save_fixing_info(self, pass_level, time, draw_map=False):
 		output_string = ''
 
-		with open('./results/fixing/txt/' + self.state + '_' + self.parcel_level + '_' + '{:02d}'.format(self.s) + 'pass' + str(pass_level)+ '.txt', 'w') as doc:
+		with open('./results_' + self.group + '/fixing/txt/' + self.state + '_' + self.parcel_level + '_' + '{:02d}'.format(self.s) + 'pass' + str(pass_level)+ '.txt', 'w') as doc:
 			output_string += (str(time) + ' \n')
 			for vertex in self.G:
 				if vertex in self.minority_fixings:
@@ -516,7 +534,7 @@ class problem_instance(object):
 	def parcel_fixing_iteration(self, pass_level, draw_map=True):
 
 		print('Attempting to read in,', pass_level, 'pass fixing information')
-		filename = './results/fixing/txt/'
+		filename = './results_' + self.group + '/fixing/txt/'
 
 
 		filename += self.state + '_' + self.parcel_level + '_' + '{:02d}'.format(self.s)
@@ -613,23 +631,26 @@ class problem_instance(object):
 
 	def create_fixing_csv_file(self):
 		
-		with open('fixing_info_each_pass.csv', 'w') as doc:
+		with open('results_' + self.group + '/fixing_info_each_pass.csv', 'w') as doc:
 			doc.write('State, parcel_level, s, pass, number of parcels, number of fixings, percent fixed, time, \n')
 		
 		
-		with open('fixing_info.csv', 'w') as doc:
+		with open('results_' + self.group + '/fixing_info.csv', 'w') as doc:
 			doc.write('State, parcel level, k, n, m, s, number of fixings, percent fixed, time, \n')
 
 
-		for file in os.listdir('./results/fixing/txt/'):
-			
-			
+		for file in os.listdir('./results_' + self.group + '/fixing/txt/'):
+		
+			if file[-4:] != '.txt':
+				continue
+			print(file)			
 			number_of_parcels = 0
 			number_of_minority_fixing_parcels = 0
 			number_of_majority_fixing_parcels = 0
 
-			f = open( './results/fixing/txt/' + file, 'r')
-
+			f = open( './results_' + self.group +'/fixing/txt/' + file, 'r')
+			print('./results_' + self.group + '/fixing/txt/' + file)
+			#print(f.readline())
 			time = f.readline()[:-2]
 			state = file[:2]
 			pass_level = file[-5:-4]
@@ -656,11 +677,11 @@ class problem_instance(object):
 
 			temp_time = '\"{:,.2f}\"'.format(float(time))
 			output_string = state + ',' + tract_level + ',' + s + ',' + pass_level + ',' + '\"{:,}\"'.format(number_of_parcels) + ',' + '\"{:,}\"'.format(number_of_minority_fixing_parcels) + ',' + '{:.2f}'.format(100*number_of_minority_fixing_parcels/number_of_parcels) +  ',' + temp_time + '\n'
-			
-			with open('fixing_info_each_pass.csv', 'a') as doc:
+			f.close()
+			with open('results_' + self.group + '/fixing_info_each_pass.csv', 'a') as doc:
 				doc.write(output_string)		
 
-		with open('fixing_info_each_pass.csv') as file:
+		with open('results_' + self.group + '/fixing_info_each_pass.csv') as file:
 			reader = csv.reader(file, delimiter=',')
 			
 			time = 0
@@ -681,7 +702,7 @@ class problem_instance(object):
 				
 
 				if row[3] == '3':
-					with open('fixing_info.csv', 'a') as doc:
+					with open('results_' + self.group + '/fixing_info.csv', 'a') as doc:
 					
 						doc.write(state + ',' + parcel_level + ',' + str(congressional_districts[state.upper()]) + ',' + str(len(self.G.nodes)) +',' + str(len(self.G.edges)) + ',' + s  + ',' + number_of_parcels_fixed + ',' + percent_fixed + ',' + str(time) + '\n')
 
@@ -830,8 +851,8 @@ class problem_instance(object):
 		pass_level_to_label_dict = {1:'Fixed in first pass', 2:'Fixed in second pass', 3:'Fixed in third pass'}
 
 		for pass_level in range(3,0,-1):
-			if os.path.exists('./results/fixing/txt/' + self.state + '_' + self.parcel_level + '_' + '{:02d}'.format(self.s) + 'pass' + str(pass_level) + '.txt'):
-				fixing_file = open('./results/fixing/txt/' + self.state + '_' + self.parcel_level + '_' + '{:02d}'.format(self.s) + 'pass' + str(pass_level) + '.txt', 'r')
+			if os.path.exists('./results_' + self.group + '/fixing/txt/' + self.state + '_' + self.parcel_level + '_' + '{:02d}'.format(self.s) + 'pass' + str(pass_level) + '.txt'):
+				fixing_file = open('./results_' + self.group + '/fixing/txt/' + self.state + '_' + self.parcel_level + '_' + '{:02d}'.format(self.s) + 'pass' + str(pass_level) + '.txt', 'r')
 				white_nodes = []
 				black_nodes = []
 				gray_nodes = []
@@ -891,7 +912,7 @@ class problem_instance(object):
 
 				oplot.patch.set_facecolor('xkcd:white')
 
-				oplot.savefig('./results/fixing/img/' + self.state + '_' + self.parcel_level + '_' + str(self.s) + 'pass' + str(pass_level) + '.png')
+				oplot.savefig('./results_' + self.group + '/fixing/img/' + self.state + '_' + self.parcel_level + '_' + str(self.s) + 'pass' + str(pass_level) + '.png')
 
 				plt.style.use('classic')
 				oplot = local_copy_shape_info.plot(column='fixing_map',categorical=True, cmap = cmap, categories=my_categories, figsize = (10,12)).get_figure()
@@ -900,7 +921,7 @@ class problem_instance(object):
 				plt.grid(False)
 				oplot.patch.set_facecolor('xkcd:white')
 
-				oplot.savefig('./results/fixing/img/no_legend_pass_' + str(pass_level) + '_' + self.state + '_' + self.parcel_level + '_' + str(self.s) + '.png')
+				oplot.savefig('./results_' + self.group + '/fixing/img/no_legend_pass_' + str(pass_level) + '_' + self.state + '_' + self.parcel_level + '_' + str(self.s) + '.png')
 
 
 		plt.style.use('classic')
@@ -911,7 +932,7 @@ class problem_instance(object):
 		plt.grid(False)
 		oplot.patch.set_facecolor('xkcd:white')
 		plt.show()
-		oplot.savefig('./results/fixing/img/' + self.state + '_' + str(self.s) + '.png')
+		oplot.savefig('./results_' + self.group + '/fixing/img/' + self.state + '_' + str(self.s) + '.png')
 
 		plt.style.use('classic')
 		oplot = local_copy_shape_info_big_map.plot(column='fixing_map',categorical=True, cmap = 'Set1', categories=['Vertex never fixed', 'Fixed in first pass', 'Fixed in second pass', 'Fixed in third pass'], figsize = (10,12)).get_figure()
@@ -919,10 +940,10 @@ class problem_instance(object):
 		plt.title('State: ' + self.state + ', s: ' + str(self.s) + ', when which parcel got fixed')
 		plt.grid(False)
 		oplot.patch.set_facecolor('xkcd:white')
-		oplot.savefig('./results/fixing/img/no_legend_' + self.state + '_' + str(self.s) + '.png')
+		oplot.savefig('./results_' + self.group + '/fixing/img/no_legend_' + self.state + '_' + str(self.s) + '.png')
 
 	def draw_symmetry_map(self):
-		max_independent_set = compuete_stability_number('read', self.G, self.state, self.k, self.s)
+		max_independent_set = compute_stability_number('read', self.G, self.state, self.k, self.s)
 		number_of_symmetry_breaking_allowed = min(len(max_independent_set), len(self.majority_district_range))
 
 		local_copy_shape_info = self.shape_info.copy()
@@ -952,7 +973,7 @@ class problem_instance(object):
 			plt.show()
 
 	def add_symmetry_constraints(self):
-		max_independent_set = list(compuete_stability_number('read', self.G, self.state, self.k, self.s))
+		max_independent_set = list(compute_stability_number('read', self.G, self.state, self.k, self.s, self.group))
 		number_of_symmetry_breaking_allowed = min(len(max_independent_set), len(self.majority_district_range))
 		
 		i = self.k - 1
@@ -1074,6 +1095,109 @@ class problem_instance(object):
 		time2 = time.time()
 		
 		self.minority_district_ONLY_model_time = time2 - time1
+
+	def no_minority_district_model(self, s, relax=False, continuity=False):
+		self.s = s
+		time1 = time.time()
+		self.m = gp.Model()
+		self.m.Params.TIME_LIMIT = self.model_time_limit
+		
+		self.m._X = self.m.addVars(self.G.nodes(), range(self.k), vtype=gp.GRB.BINARY, name='X')
+
+		self.m.addConstrs(gp.quicksum(self.m._X[v, j] for j in range(self.k)) == 1 for v in self.G.nodes())
+
+		#1c
+		self.m.addConstrs(self.L <= gp.quicksum(self.population[v] * self.m._X[v, j] for v in self.G.nodes()) for j in range(self.k))
+		#1c
+		self.m.addConstrs(self.U >= gp.quicksum(self.population[v] * self.m._X[v, j] for v in self.G.nodes()) for j in range(self.k))
+		#1d
+	
+	
+		self.m._k_minority = self.k
+		self.m._G = self.G
+		self.m._k = self.k
+		self.m._option = 'minority'
+		self.m._s = s
+
+
+		self.m.Params.lazyConstraints = 1
+		self.m._minority_district_range = range(self.k)
+		
+		self.m._district_vars_exist = False
+		self.m._L = self.L
+		self.m._population = self.population
+		self.m._n = len(self.G.nodes())
+		self.m.optimize(compactness_callback)
+	
+
+		if self.m.status == gp.GRB.OPTIMAL:
+
+			#self.minority_districts = [[] for i in range(int(self.m.getAttr(gp.GRB.Attr.ObjVal)))]
+			districts = [[] for i in range(self.k)]
+			#self.num_minority_districts = self.k
+
+
+
+
+			for district_number in range(self.k):
+				for vertex in self.G.nodes():
+					if self.m._X[vertex, district_number].x > 0.5:
+						districts[district_number].append(vertex)
+
+			print(districts)
+			self.minority_districts = districts
+			self.num_minority_districts = len(districts)
+			self.plotter('minority', 'results_none/images/' + str(self.state) + str(self.s))
+			self.time_out = False
+
+		elif self.m.status == gp.GRB.TIME_LIMIT:
+			self.num_minority_districts = self.m.getAttr(gp.GRB.Attr.ObjVal)
+			self.time_out = True
+		else:
+			self.num_minority_districts = 'Model Status: ' + str(self.m.status)
+			self.time_out = False
+		time2 = time.time()
+		
+		self.no_minority_district_model_time = '{0:.2f}'.format(time2-time1)
+
+	def find_interesting_s_vals_no_minority(self):
+
+		s = self.lower_bound_s - 1
+
+		continue_search = True
+
+		if not os.path.exists('results_' + self.group + '/interesting_s_vals.csv'):
+			with open('results_' + self.group + '/interesting_s_vals.csv', 'a') as doc:
+				doc.write('state, s, result, time out, time \n')
+
+		output_string = ''
+
+		while continue_search:
+			s += 1
+
+			self.no_minority_district_model(s)
+			
+			if self.time_out == True:
+				continue_search = False
+
+			if type(self.num_minority_districts) != int:
+				continue_search = True
+			
+			if s == self.upper_bound_s:
+				continue_search = False
+
+			if self.k == self.num_minority_districts:
+				continue_search = False
+		
+			current_string = str(s) + ', ' + str(self.num_minority_districts) + ',' + str(self.time_out) + ',' + str(self.no_minority_district_model_time) + '\n'
+			output_string += current_string
+			#self.break_points.append([s, self.num_minority_districts])
+
+			with open('./results_' + self.group + '/interesting_s_vals.csv', 'a') as doc:
+				current_string = self.state + ',' + current_string
+				doc.write(current_string)
+		with open('./results_' + self.group + '/interesting_s_vals/interesting_s_vals_' + self.state + '_' + self.parcel_level + '.csv', 'w') as doc:
+			doc.write(output_string)
 
 	def labeling_model(self, reduced_model, parcel_fixing, symmetry_breaking_constraint):
 
@@ -1249,7 +1373,7 @@ class problem_instance(object):
 			else:
 				self.add_lazy_distance_cuts(self.m, 'minority', False)
 			
-			#max_independent_set = compuete_stability_number('read', self.G, self.state, self.k, self.s)
+			#max_independent_set = compute_stability_number('read', self.G, self.state, self.k, self.s)
 			#number_of_symmetry_breaking_allowed = min(len(max_independent_set), len(self.majority_district_range))
 			
 			#i = self.k - 1
@@ -1374,7 +1498,7 @@ class problem_instance(object):
 			gerrychain_output = [minority_districts_from_gerrychain, majority_districts_from_gerrychain]
 
 		
-			with open('./results/gerrychain/' + self.state + '_' + self.parcel_level + '_(' + '{:02d}'.format(gerrychain_s) + ',' + '{:02d}'.format(gerrychain_num_minority_district) + ').pckl', 'wb') as doc:
+			with open('./results_' + self.group + '/gerrychain/' + self.state + '_' + self.parcel_level + '_(' + '{:02d}'.format(gerrychain_s) + ',' + '{:02d}'.format(gerrychain_num_minority_district) + ').pckl', 'wb') as doc:
 				pickle.dump(gerrychain_output, doc)
 		gerrychain_output_string += '\n'
 		
@@ -1387,7 +1511,7 @@ class problem_instance(object):
 		
 	def make_sure_preprocess_exists(self):
 
-		result = compuete_stability_number('read', self.G, self.state, self.k, self.s)
+		result = compute_stability_number('read', self.G, self.state, self.k, self.s, self.group)
 		
 		self.minority_fixings = []
 		self.majority_fixings = []
@@ -1397,12 +1521,13 @@ class problem_instance(object):
 		self.parcel_fixing_iteration(3)
 
 	def generate_instance_info(self):
-		if not os.path.exists('instance_info.csv'):
-			with open('instance_info.csv', 'w') as doc:
+		if not os.path.exists('results_' + self.group + '/instance_info.csv'):
+			with open('results_' + self.group + '/instance_info.csv', 'w') as doc:
 				doc.write('State, parcel, k, n, m, diam, % Black pop, current s, split parcels, current # minority districts')
 		
-		with open('instance_info.csv', 'a') as doc:
+		with open('results_' + self.group + '/instance_info.csv', 'a') as doc:
 			current_s, split_number = self.get_current_plan_stat()
+			#current_s, split_number = 'NA', 'NA'
 			string = '\n'
 			string += self.state + ', ' + self.parcel_level + ', ' + str(self.k) + ', '+ str(len(self.G.nodes())) + ', ' + str(len(self.G.edges())) + ', ' + str(nx.diameter(self.G)) + ', ' + format(100 * sum(self.minority_population)/sum(self.voting_age_population), '.2f') + ',' + str(current_s) + ',' +  str(split_number) + self.error_message + ', '
 			
@@ -1411,8 +1536,8 @@ class problem_instance(object):
 
 	def generate_upper_bound_minority_table(self):
 		
-		if not os.path.exists('upper_bound_minority_table.csv'):
-			with open('upper_bound_minority_table.csv', 'w') as doc:
+		if not os.path.exists('results_' + self.group + '/upper_bound_minority_table.csv'):
+			with open('results_' + self.group + '/upper_bound_minority_table.csv', 'w') as doc:
 				doc.write('State, parcel, k, n, m, objective, time (s), x & z fixed (%)')
 
 		instance.k_minority = instance.k
@@ -1422,7 +1547,7 @@ class problem_instance(object):
 		instance.table_3_first_pass_time = instance.minority_district_ONLY_model_time
 		instance.minority_district_range = range(instance.k)
 
-		with open('upper_bound_minority_table.csv', 'a') as doc:
+		with open('results_' + self.group + '/upper_bound_minority_table.csv', 'a') as doc:
 				string = '\n'
 				string += self.state + ',' 
 				string += self.parcel_level + ',' 
@@ -1435,29 +1560,6 @@ class problem_instance(object):
 
 				doc.write(string)
 				doc.close()
-
-	def generate_lower_bound_s_table(self):
-		if not os.path.exists('lower_bound_s_table.csv'):
-			with open('lower_bound_s_table.csv', 'w') as doc:
-				doc.write('State, land parcel, k, n, m, l_s, Iter, time (s)')
-		
-		instance.compute_lower_bound_s()
-		
-		
-
-		with open('lower_bound_s_table.csv', 'a') as doc:
-			string = '\n'
-			string += self.state + ','
-			string += self.parcel_level  + ','
-			string += str(self.k) + ','
-			string += str(len(self.G.nodes())) + ',' 
-			string += str(len(self.G.edges())) + ',' 
-			string += str(self.lower_bound_s) + ','
-			string += str(self.num_s_iter) + ',' 
-			string += format(self.time_for_s_lower_bound, '.2f')
-
-			doc.write(string)
-			doc.close()
 
 	def generate_fixing_info(self):
 		
@@ -1474,70 +1576,21 @@ class problem_instance(object):
 
 	def generate_lower_bound_s_table(self):
 		
-		if not os.path.exists('lower_bound_s_table.csv'):
-			with open('lower_bound_s_table.csv', 'w') as doc:
+		if not os.path.exists('results_' + self.group + '/lower_bound_s_table.csv'):
+			with open('results_' + self.group + '/lower_bound_s_table.csv', 'w') as doc:
 				doc.write('State, parcel, lower_bound_s, iterations, time')
 
 		instance.compute_lower_bound_s()
 		
-		with open('lower_bound_s_table.csv', 'a') as doc:
+		with open('results_' + self.group + '/lower_bound_s_table.csv', 'a') as doc:
 			string = '\n'
 			string += self.state + ', ' + self.parcel_level + ', ' + str(self.lower_bound_s) + ', ' + str(self.num_s_iter) + ', ' + format(self.time_for_s_lower_bound, '.2f') + ',' + self.error_message + ', '
 			doc.write(string)
 			doc.close()
-	'''
-	def generate_table_7(self):
-		
-		if not os.path.exists('table_7.csv'):
-			with open('table_7.csv', 'w') as doc:
-				doc.write('State, parcel, n, m, s, reduced_obj, reduced_time, prescribed_obj, prescribed time \n')
-
-		try_higher_s = True
-
-		while try_higher_s:
-			
-
-			self.make_sure_preprocess_exists()
-			#
-			#self.labeling_model(False, False, False)
-			#base_model_objective = self.num_minority_districts
-			#base_model_time = '{0:.2f}'.format(self.model_runtime)
-			#
-			#self.labeling_model(True, False, False)
-			#reduced_model_objective_plain = self.num_minority_districts
-			#reduced_model_time_plain = '{0:.2f}'.format(self.model_runtime)
-			#
-			self.labeling_model(True, True, True)
-			reduced_model_objective = self.num_minority_districts
-			reduced_model_time = '{0:.2f}'.format(self.model_runtime)
-			#
-			#self.labeling_model(True, True, True)
-			#reduced_model_objective_with_symmetry_parcel_fixing = self.num_minority_districts
-			#reduced_model_time_with_symmetry_parcel_fixing = '{0:.2f}'.format(self.model_runtime)
-			#
-			#self.labeling_model(True, True, False)
-			#reduced_model_no_sym = self.num_minority_districts
-			#reduced_model_time_no_sym = '{0:.2f}'.format(self.model_runtime)
-			#			
-			prescribed_model_objective, prescribed_model_time = self.optimize_prescribed_labeling_model([])
-			prescribed_model_time = '{0:.2f}'.format(prescribed_model_time)
-
-
-
-			if prescribed_model_objective == 'Timeout':
-				try_higher_s = False
-			if prescribed_model_objective == self.k_minority:
-				try_higher_s = False
-	
-
-			with open('table_7.csv', 'a') as doc:
-				doc.write(self.state + ',' + self.parcel_level + ',' + str(len(self.G.nodes)) + ',' + str(len(self.G.edges)) + ',' + str(self.s) + ','  + str(reduced_model_objective) + ',' + reduced_model_time + ',' + str(prescribed_model_objective) + ',' + prescribed_model_time + '\n')
-								
-			self.s += 1
-	'''					
+					
 	def generate_point_check_table(self):
-		if not os.path.exists('point_check.csv'):
-			with open('point_check.csv', 'w') as doc:
+		if not os.path.exists('results_' + self.group + '/point_check.csv'):
+			with open('results_' + self.group + '/point_check.csv', 'w') as doc:
 				doc.write('State, parcel level, s, number of minority districts, model result, model time \n')
 			
 		values_of_k_minority_to_investigate = range(self.k_minority, 0, -1)
@@ -1576,7 +1629,7 @@ class problem_instance(object):
 					condition = False
 
 				MIP_output_string += model_result + ',' + MIP_time + ',' + '\n'
-				with open('point_check.csv', 'a') as doc:
+				with open('results_' + self.group + '/point_check.csv', 'a') as doc:
 					doc.write(MIP_output_string)
 
 				if self.s >= 10:
@@ -1592,7 +1645,7 @@ class problem_instance(object):
 
 		
 		
-		for file in os.listdir('results/gerrychain'):
+		for file in os.listdir('results_' + self.group + '/gerrychain'):
 			gerrychain_state = file[:2]
 			if file[3:9] == 'tract_':
 				gerrychain_parcel_level = 'tract'
@@ -1604,7 +1657,7 @@ class problem_instance(object):
 
 			if self.state == gerrychain_state and self.parcel_level == gerrychain_parcel_level:
 
-				with open('results/gerrychain/' + file, 'rb') as f:
+				with open('results_' + self.group + '/gerrychain/' + file, 'rb') as f:
 					gerrychain_data = pickle.load(f)
 					minority_districts_from_gerrychain = gerrychain_data[0]
 					majority_districts_from_gerrychain = gerrychain_data[1]
@@ -1941,17 +1994,17 @@ class problem_instance(object):
 
 	def create_upper_bound_s_table(self):
 	
-		if not os.path.exists('upper_bound_s_table.csv'):
-			with open('upper_bound_s_table.csv', 'w') as doc:
+		if not os.path.exists('results_' + self.group + '/upper_bound_s_table.csv'):
+			with open('results_' + self.group + '/upper_bound_s_table.csv', 'w') as doc:
 				doc.write('State, parcel, k, m, n, upper bound s time, upper bound s, number of iterations, diameter \n')
 
 		upper_bound_s_time, upper_bound_s, number_of_iterations = self.upper_bound_s_algo()
 		
 		
-		with open('results/upper_bound_s/upper_bound_s_' + self.state + '_' + self.parcel_level + '.txt', 'w') as file:
+		with open('results_' + self.group + '/upper_bound_s/upper_bound_s_' + self.state + '_' + self.parcel_level + '.txt', 'w') as file:
 			file.write(str(upper_bound_s))
 
-		with open('upper_bound_s_table.csv', 'a') as doc:	
+		with open('results_' + self.group + '/upper_bound_s_table.csv', 'a') as doc:	
 			print("Upper bound on s computed as: ", upper_bound_s)
 			string = self.state + ',' + self.parcel_level + ',' + str(self.k) + ',' + str(len(self.G.edges())) + ',' + str(len(self.G.nodes())) + ',' + '{0:.2f}'.format(upper_bound_s_time) + ',' + str(upper_bound_s) + ',' + str(number_of_iterations) + ',' + str(nx.diameter(self.G)) + '\n'
 			
@@ -2322,8 +2375,8 @@ class problem_instance(object):
 
 	def generate_symmetry_table(self):
 
-		if not os.path.exists('symmetry_table.csv'):
-			with open('symmetry_table.csv', 'w') as doc:
+		if not os.path.exists('results_' + self.group + '/symmetry_table.csv'):
+			with open('results_' + self.group + '/symmetry_table.csv', 'w') as doc:
 				doc.write('State, parcel level, k, n, m, s, obj_wo_symmetry, time_wo_symmetry, obj_w_symmetry, time_w_symmetry, \n')
 
 		string = self.state + ',' + self.parcel_level + ',' + str(self.k) + ',' + str(len(self.G.nodes)) + ',' + str(len(self.G.edges)) + ','  + str(self.s) + ','
@@ -2351,13 +2404,13 @@ class problem_instance(object):
 
 	
 
-		with open('symmetry_table.csv', 'a') as doc:
+		with open('results_' + self.group + '/symmetry_table.csv', 'a') as doc:
 			doc.write(string)
-
+ 	
 	def check_points_with_prescribed_model(self):
 
-		if not os.path.exists('point_check.csv'):
-			with open('point_check.csv', 'w') as doc:
+		if not os.path.exists('results_' + self.group + '/point_check.csv'):
+			with open('results_' + self.group + '/point_check.csv', 'w') as doc:
 				doc.write('State, parcel, n, m, num_minority_districts, s, feasible/infeasible/unknown, time \n')
 
 		
@@ -2412,7 +2465,7 @@ class problem_instance(object):
 		
 
 
-			with open('point_check.csv', 'a') as doc:
+			with open('results_' + self.group + '/point_check.csv', 'a') as doc:
 				doc.write(string)
 
 	def short_bursts(self):
@@ -2583,7 +2636,6 @@ class problem_instance(object):
 	
 				num_minority = number_of_gingles_districts(self.G, incumbent_plan, minority)
 				doc.write(self.state + ',' + self.parcel_level + ',' + str(len(self.G.nodes)) + ',' + str(len(self.G.edges)) + ',' + str(num_minority) + ',' + str(incumbent_s) + ',' +  str(i) + ',' + str(region_aware) + ',' + '{0:.2f}'.format(time2-time1) + '\n')
-			
 
 	def lower_bound_s_minority_dist_only(self):
 
@@ -2606,7 +2658,6 @@ class problem_instance(object):
 
 			elif self.m.status == 9:
 				model_result = 'Timeout'
-
 			else:
 				model_result = 'unanticpated termination gurobicode: ' + str(self.m.status)
 
@@ -2643,37 +2694,57 @@ if __name__ == '__main__':
 	file = open('data.json', 'r')
 	data = json.load(file)
 	
+	group = 'hispanic'
+	#group = 'black'
+	#group = 'none'
+	#dataset = 'hispanic_paper'
+	#dataset = 'paper'
+	#dataset = 'paper'
+	#dataset = 'hispanic_only'
+	dataset = 'single'
 
-	for request in data['first_half']:
+	for request in data[dataset]:
+		
 		print('State: ', request['state'])
 		print('Parcel level: ', request['parcel_level'])
 
-		instance = problem_instance(request['state'], request['parcel_level'], request['s'])
+		#if request['state'] == 'TX':
+		#	continue
+		
+		instance = problem_instance(request['state'], request['parcel_level'], request['s'], group)
 
  
 		if instance.error_message != '':
 			print('ERROR: ', instance.error_message)
 			break
 		
-	
-
+		
+		#instance.create_upper_bound_s_table()
+		#instance.find_upper_bound_s()
+		#instance.generate_lower_bound_s_table()
+		#instance.find_interesting_s_vals_no_minority()
+		#instance.create_fixing_csv_file()
 		#instance.black_population_map()
 		#instance.draw_symmetry_map()
-
 		#instance.generate_gerrychain_run(10)
 		#instance.make_sure_preprocess_exists()
 		#instance.generate_instance_info()
+		#instance.generate_instance_info()
 		#instance.generate_upper_bound_minority_table()
 		#instance.generate_lower_bound_s_table()
-		#instance.find_interesting_s_vals()
-		#instance.generate_fixing_info()
-		
+		#instance.generate_point_check_table()
+		#instance.make_sure_preprocess_exists()
 		#instance.check_points_with_prescribed_model()
-		
+		#instance.generate_lower_bound_s_table()
+		#instance.generate_instance_info()
+		#instance.create_upper_bound_s_table()
+		#instance.generate_symmetry_table()
+		#instance.generate_fixing_info()
+		#instance.check_points_with_prescribed_model()
 		#instance.short_bursts()
 		#instance.lower_bound_s_minority_dist_only()
-		
 		#instance.draw_fixing_map()
 		#instance.black_population_map()
-
+		#instance.find_upper_bound_minority_districts()
+		
 	file.close()

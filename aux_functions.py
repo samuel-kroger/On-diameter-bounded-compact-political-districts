@@ -19,6 +19,15 @@ def get_state_codes():
 	'SC': '45', 'KY': '21'
 }
 
+"""
+for i in get_state_codes():
+	print('''
+		{
+			"state":"''' + i + '''",
+			"parcel_level":"tract",
+			"s":false
+		},''')
+"""
 def get_congressional_codes():
 	return {
 	'WA': 10, 'DE': 1, 'WI': 8, 'WV': 2, 'HI': 2,
@@ -32,8 +41,8 @@ def get_congressional_codes():
 	'SC': 7, 'KY': 6, 'OR': 6, 'SD': 1
 }
 
-def read_gerrychain(state, parcel_level, s, num_minority_districts):
-	with open('./results/gerrychain/' + state + '_' + parcel_level + '_(' + s + ',' + num_minority_districts + ').pckl', 'rb') as doc:
+def read_gerrychain(state, parcel_level, s, num_minority_districts, group):
+	with open('./results_' + group + '/gerrychain/' + state + '_' + parcel_level + '_(' + s + ',' + num_minority_districts + ').pckl', 'rb') as doc:
 		gerrychain_result = pickle.load(doc)
 		minority_districts = gerrychain_result[0]
 		majority_districts = gerrychain_result[1]
@@ -72,11 +81,11 @@ def s_call_back(m, where):
 					m.cbLazy(m._X[u, j] + m._X[v, j] <= m._Z[j])
 
 
-def compuete_stability_number(method, graph, state, k, s):
+def compute_stability_number(method, graph, state, k, s, group):
 	
 	if method == 'read':
-		if os.path.exists('./results/max_independent_set/' + state + '_' + str(s) + '.csv'):
-			with open('./results/max_independent_set/' + state + '_' + str(s) + '.csv') as csvfile:
+		if os.path.exists('./results_' + group + '/max_independent_set/' + state + '_' + str(s) + '.csv'):
+			with open('./results_' + group + '/max_independent_set/' + state + '_' + str(s) + '.csv') as csvfile:
 				csvreader = csv.reader(csvfile, delimiter=',')
 			
 				for row in csvreader:
@@ -123,7 +132,7 @@ def compuete_stability_number(method, graph, state, k, s):
 
 	end_time = time.time()
 
-	with open('./results/max_independent_set/' + state + '_' + str(s) + '.csv', 'w') as csvfile:
+	with open('./results_' + group + '/max_independent_set/' + state + '_' + str(s) + '.csv', 'w') as csvfile:
 		writer = csv.writer(csvfile, delimiter=',')
 		writer.writerow([max_independent_set, end_time - start_time])
 		

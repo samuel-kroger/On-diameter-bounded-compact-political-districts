@@ -1,0 +1,7 @@
+State, parcel, k, m, n, upper bound s time, upper bound s, number of iterations, diameter 
+NM,county,3,78,33,1.30,16.0,33,7
+NJ,tract,12,6061,2181,7100.92,45,2,45
+NM,tract,3,1631,612,7100.27,16,2,16
+CO,tract,8,3909,1447,7100.81,22,2,22
+IL,tract,17,8728,3265,7100.81,52,2,52
+AZ,tract,9,4593,1765,7100.70,24,2,24
